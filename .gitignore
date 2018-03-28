@@ -50,3 +50,9 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+# Program specific
+obj/
+out/
+*.bmp
+render
