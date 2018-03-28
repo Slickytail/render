@@ -8,12 +8,14 @@ typedef struct rgb_pixel {
 
 typedef struct pixelbuffer {
     unsigned char* data;
-    unsigned int W;
-    unsigned int H;
+    int W;
+    int H;
 } Image;
 
-Image create_image(unsigned int W, unsigned int H, Pixel v);
-void change_pixel(Image buffer, unsigned int X, unsigned int Y, Pixel V);
-Pixel getPixel(Image buffer, unsigned int X, unsigned int Y);
+Image create_image(int W, int H, Pixel v);
+void change_pixel(Image buffer, int X, int Y, Pixel v);
+Pixel getPixel(Image buffer, int X, int Y);
+
+int byte_at_pixel(int W, int H, int X, int Y);
 
 #endif

@@ -3,6 +3,7 @@ INCDIR = ../include
 
 CC = gcc
 CFLAGS = -Wall -std=c99 -I$(INCDIR)
+MATH = -lm
 
 _DEPS = pixels.h stb_image_write.h
 DEPS = $(patsubst %,$(INCDIR)/%,$(_DEPS))
@@ -14,7 +15,7 @@ $(OBJ): $(OBJDIR)/%.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)
 
 render: $(OBJ)
-	gcc -o $@ $^ $(CFLAGS)
+	gcc -o $@ $^ $(CFLAGS) $(MATH)
 
 .PHONY: clean
 
