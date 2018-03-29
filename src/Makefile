@@ -9,7 +9,7 @@ MATH = -lm
 _DEPS = pixels.h stb_image_write.h geometry.h models.h
 DEPS = $(patsubst %,$(INCDIR)/%,$(_DEPS))
 
-_OBJ = render.o pixels.o geometry.o
+_OBJ = render.o pixels.o geometry.o models.o
 OBJ = $(patsubst %,$(OBJDIR)/%,$(_OBJ))
 
 $(OBJ): $(OBJDIR)/%.o: %.c $(DEPS)

@@ -5,17 +5,12 @@
 
 struct model {
     int nverts;
-    Polygon vertices[];
+    int nfaces;
+    Vec* vertices;
+    Vec* normals;
+    int* vertexIndex;
 };
+struct model pyramid;
 
-const struct model pyramid = {6, {
-    (Polygon) { {1, 0, -1}, {-1, 0, 1}, {-1, 0, -1} },
-    (Polygon) { {1,  0, 1},  {-1, 0, 1}, {1, 0, -1} },
-    (Polygon) { {1,  0, -1},  {0,  1, 0}, {1, 0, 1} },
-    (Polygon) { {1,  0, 1},  {0,  1, 0}, {-1, 0, 1} },
-    (Polygon) { {-1, 0, 1}, {0,  1, 0}, {-1, 0, -1} },
-    (Polygon) { {-1, 0, -1}, {0,  1, 0}, {1, 0, -1} } },
-};
-
-
+struct model* load_obj(const char* name);
 #endif
