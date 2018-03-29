@@ -60,7 +60,7 @@ Pixel raytrace(Vec raypos, Vec raydir) {
         return (Pixel) {40, 100, 225};
     Polygon it = pyramid.vertices[k];
     Vec normal = normalize(cross(subvec(it.b, it.a), subvec(it.c, it.a)));
-    double d = dot(normal, normalize(raydir));
+    double d = dot(normal, scalevec(normalize(raydir), -1));
     if (d < 0)
         d = 0;
     return (Pixel) {255 * d, 255 * d, 255 * d};
@@ -68,18 +68,21 @@ Pixel raytrace(Vec raypos, Vec raydir) {
 }
 
 void render(Image buffer) {
-    Vec camera = {0, 1.5, 1.5};
-    Vec cangle = normalize((Vec){0, -1.5, -1.5});
+    Vec camera = {2, 2, 0.5};
+    Vec cangle = normalize((Vec){-2, -1, -0.2});
     Vec uu = normalize(cross((Vec) {0, 1, 0}, cangle));
     Vec vv = normalize(cross(cangle, uu));
+    double fov_a = tan(1.13446/2);
+    double aspectRatio = (double) buffer.W / buffer.H;
 
     double uvx;
     double uvy;
+
     for (int x = 0; x < buffer.W; x++) {
         for (int y = 0; y < buffer.H; y++) {
-            uvx = 2*x/buffer.W-1;
-            uvy = 2*y/buffer.H-1;
-            Vec dir = normalize(addvec(addvec(scalevec(uu, uvx),scalevec(vv, uvy)), cangle)); 
+            uvx = (((double)x * 2.0  + 1)/buffer.W - 1) * aspectRatio * fov_a;
+            uvy = (1-((double)y * 2.0 + 1)/buffer.H) * fov_a;
+            Vec dir = normalize(addvec(addvec(scalevec(uu, uvx),scalevec(vv, uvy)), cangle));
             Pixel V = raytrace(camera, dir);
             change_pixel(buffer, x, y, V);
         }
