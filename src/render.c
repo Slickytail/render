@@ -14,22 +14,22 @@
 int rayTriangleIntersect (Vec orig, Vec dir, const Vec v0, const Vec v1, const Vec v2, double *t, double *u, double *v) { 
     Vec v0v1 = subvec(v1, v0); 
     Vec v0v2 = subvec(v2, v0); 
-    Vec pvec = cross(dir, v0v2); 
-    float det = dot(v0v1, pvec); 
+    Vec pvec = cross(dir, v0v2);
+    float det = dot(v0v1, pvec);
  
     // ray and triangle are parallel if det is close to 0
     if (fabs(det) < EPSILON)
         return 0; 
  
-    float invDet = 1 / det; 
+    float invDet = 1 / det;
  
-    Vec tvec = subvec(orig, v0); 
-    *u = dot(tvec, pvec) * invDet; 
+    Vec tvec = subvec(orig, v0);
+    *u = dot(tvec, pvec) * invDet;
     if (*u < 0 || *u > 1)
         return 0; 
  
-    Vec qvec = cross(tvec, v0v1); 
-    *v = dot(dir, qvec) * invDet; 
+    Vec qvec = cross(tvec, v0v1);
+    *v = dot(dir, qvec) * invDet;
     if (*v < 0 || *u + *v > 1)
         return 0;
  
@@ -38,20 +38,19 @@ int rayTriangleIntersect (Vec orig, Vec dir, const Vec v0, const Vec v1, const V
     return 1; 
 } 
 Pixel raytrace(Vec raypos, Vec raydir, struct model* pot) {
-    // We will trace this ray from the camera until it hits a pyramid.
+    // We will trace this ray from the camera until it hits a triangle
     int smooth = 0;
     if (pot->f == VNORM || pot->f == VTEXNORM) {
         smooth = 1;
     }
 
     double tnear = 10000;
-    int isect = 0;
     double t = 10000000;
-    double uf;
-    double vf;
+    double uf = -1;
+    double vf = -1;
     double u = 0;
     double v = 0;
-    int hittri;
+    int hittri = -1;
     Vec p1;
     Vec p2;
     Vec p3;
@@ -64,10 +63,9 @@ Pixel raytrace(Vec raypos, Vec raydir, struct model* pot) {
             uf = u;
             vf = v;
             hittri = i;
-            isect = 1;
         }
     }
-    if (!isect)
+    if (hittri==-1)
         return (Pixel) {0, 255, 0};
     Vec normal;
     if (!smooth) {
@@ -80,9 +78,9 @@ Pixel raytrace(Vec raypos, Vec raydir, struct model* pot) {
         p1 = pot->normals[pot->vertexIndex[hittri*3]];
         p2 = pot->normals[pot->vertexIndex[hittri*3+1]];
         p3 = pot->normals[pot->vertexIndex[hittri*3+2]];
-        normal = normalize(addvec(addvec(scalevec(p1, 1 - uf - vf), scalevec(p2, uf)), scalevec(p3, vf))); 
+        normal = addvec(addvec(scalevec(p1, 1 - uf - vf), scalevec(p2, uf)), scalevec(p3, vf)); 
     }
-    double d = dot(normal, scalevec(normalize(raydir), -1));
+    double d = -dot(normal, raydir);
     if (d < 0)
         d = 0;
     return (Pixel) {255 * d, 255 * d, 255 * d};
