@@ -39,6 +39,11 @@ int rayTriangleIntersect (Vec orig, Vec dir, const Vec v0, const Vec v1, const V
 } 
 Pixel raytrace(Vec raypos, Vec raydir, struct model* pot) {
     // We will trace this ray from the camera until it hits a pyramid.
+    int smooth = 0;
+    if (pot->f == VNORM || pot->f == VTEXNORM) {
+        smooth = 1;
+    }
+
     double tnear = 10000;
     int isect = 0;
     double t = 10000000;
@@ -64,10 +69,19 @@ Pixel raytrace(Vec raypos, Vec raydir, struct model* pot) {
     }
     if (!isect)
         return (Pixel) {0, 255, 0};
-    p1 = pot->vertices[pot->vertexIndex[hittri*3]];
-    p2 = pot->vertices[pot->vertexIndex[hittri*3+1]];
-    p3 = pot->vertices[pot->vertexIndex[hittri*3+2]];
-    Vec normal = normalize(cross(subvec(p2, p1), subvec(p3, p1)));
+    Vec normal;
+    if (!smooth) {
+        p1 = pot->vertices[pot->vertexIndex[hittri*3]];
+        p2 = pot->vertices[pot->vertexIndex[hittri*3+1]];
+        p3 = pot->vertices[pot->vertexIndex[hittri*3+2]];
+        normal = normalize(cross(subvec(p2, p1), subvec(p3, p1)));
+    }
+    else {
+        p1 = pot->normals[pot->vertexIndex[hittri*3]];
+        p2 = pot->normals[pot->vertexIndex[hittri*3+1]];
+        p3 = pot->normals[pot->vertexIndex[hittri*3+2]];
+        normal = normalize(addvec(addvec(scalevec(p1, 1 - uf - vf), scalevec(p2, uf)), scalevec(p3, vf))); 
+    }
     double d = dot(normal, scalevec(normalize(raydir), -1));
     if (d < 0)
         d = 0;
@@ -76,8 +90,8 @@ Pixel raytrace(Vec raypos, Vec raydir, struct model* pot) {
 }
 
 void render(Image buffer, struct model* pot) {
-    Vec camera = {3.5, 1.5, 1};
-    Vec cangle = normalize((Vec){-2, -0.6, 0});
+    Vec camera = {3, 0, 0};
+    Vec cangle = normalize((Vec) {-1, 0, 0});
     Vec uu = normalize(cross((Vec) {0, 1, 0}, cangle));
     Vec vv = normalize(cross(cangle, uu));
     double fov_a = tan(1.35/2);
@@ -115,12 +129,15 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "Bad width or height\n");
         return 1;
     } // OK, we can run now.
-    // Load model
-    struct model* pot = load_obj(name);
-    printf("%d tris, %d verts, %d texture coordinates\n", pot->nfaces, pot->nverts, pot->ntex);
     // Initialize blank canvas
     const Pixel BACKGROUND = {40, 100, 225};
     Image buffer = create_image(W, H, BACKGROUND);
+
+    // Load model
+    struct model* pot = load_obj(name);
+    if (pot->f == VNORM || pot->f == VTEXNORM) {
+        printf("Found normals. Enabling smooth shading...\n");
+    }
     render(buffer, pot);
     // Save image to file
     stbi_write_bmp(filename, buffer.W, buffer.H, 3, buffer.data);
