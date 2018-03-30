@@ -37,7 +37,7 @@ int rayTriangleIntersect (Vec orig, Vec dir, const Vec v0, const Vec v1, const V
  
     return 1; 
 } 
-Pixel raytrace(Vec raypos, Vec raydir) {
+Pixel raytrace(Vec raypos, Vec raydir, struct model* pot) {
     // We will trace this ray from the camera until it hits a pyramid.
     double tnear = 10000;
     int isect = 0;
@@ -50,10 +50,10 @@ Pixel raytrace(Vec raypos, Vec raydir) {
     Vec p1;
     Vec p2;
     Vec p3;
-    for (int i = 0; i < pyramid.nfaces; i++) {
-        p1 = pyramid.vertices[pyramid.vertexIndex[i*3]];
-        p2 = pyramid.vertices[pyramid.vertexIndex[i*3+1]];
-        p3 = pyramid.vertices[pyramid.vertexIndex[i*3+2]];
+    for (int i = 0; i < pot->nfaces; i++) {
+        p1 = pot->vertices[pot->vertexIndex[i*3]];
+        p2 = pot->vertices[pot->vertexIndex[i*3+1]];
+        p3 = pot->vertices[pot->vertexIndex[i*3+2]];
         if (rayTriangleIntersect(raypos, raydir, p1, p2, p3, &t, &u, &v) && t < tnear) {
             tnear = t;
             uf = u;
@@ -63,10 +63,10 @@ Pixel raytrace(Vec raypos, Vec raydir) {
         }
     }
     if (!isect)
-        return (Pixel) {40, 100, 225};
-    p1 = pyramid.vertices[pyramid.vertexIndex[hittri*3]];
-    p2 = pyramid.vertices[pyramid.vertexIndex[hittri*3+1]];
-    p3 = pyramid.vertices[pyramid.vertexIndex[hittri*3+2]];
+        return (Pixel) {0, 255, 0};
+    p1 = pot->vertices[pot->vertexIndex[hittri*3]];
+    p2 = pot->vertices[pot->vertexIndex[hittri*3+1]];
+    p3 = pot->vertices[pot->vertexIndex[hittri*3+2]];
     Vec normal = normalize(cross(subvec(p2, p1), subvec(p3, p1)));
     double d = dot(normal, scalevec(normalize(raydir), -1));
     if (d < 0)
@@ -75,9 +75,9 @@ Pixel raytrace(Vec raypos, Vec raydir) {
 
 }
 
-void render(Image buffer) {
-    Vec camera = {2, 1, 0.8};
-    Vec cangle = normalize((Vec){-2, -1, -0.8});
+void render(Image buffer, struct model* pot) {
+    Vec camera = {3.5, 1.5, 1};
+    Vec cangle = normalize((Vec){-2, -0.6, 0});
     Vec uu = normalize(cross((Vec) {0, 1, 0}, cangle));
     Vec vv = normalize(cross(cangle, uu));
     double fov_a = tan(1.35/2);
@@ -91,7 +91,10 @@ void render(Image buffer) {
             uvx = (((double)x * 2.0  + 1)/buffer.W - 1) * aspectRatio * fov_a;
             uvy = (1-((double)y * 2.0 + 1)/buffer.H) * fov_a;
             Vec dir = normalize(addvec(addvec(scalevec(uu, uvx),scalevec(vv, uvy)), cangle));
-            Pixel V = raytrace(camera, dir);
+            Pixel V = raytrace(camera, dir, pot);
+            if (V.r == 0 && V.g == 255) {
+                V = (Pixel) {y * 256 / buffer.H, 256 - (y * 256 / buffer.H), 100};
+            }
             change_pixel(buffer, x, y, V);
         }
     }
@@ -112,13 +115,15 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "Bad width or height\n");
         return 1;
     } // OK, we can run now.
-    load_obj(name);
-    return 0;
+    // Load model
+    struct model* pot = load_obj(name);
+    printf("%d tris, %d verts, %d texture coordinates\n", pot->nfaces, pot->nverts, pot->ntex);
     // Initialize blank canvas
     const Pixel BACKGROUND = {40, 100, 225};
     Image buffer = create_image(W, H, BACKGROUND);
-    render(buffer);
+    render(buffer, pot);
     // Save image to file
     stbi_write_bmp(filename, buffer.W, buffer.H, 3, buffer.data);
-    
+    // Free model memory
+    free(pot);
 }
