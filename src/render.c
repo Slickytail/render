@@ -99,8 +99,10 @@ void render(Image buffer, struct model* pot) {
 
     double uvx;
     double uvy;
-
+    int tencent = buffer.W / 10;
     for (int x = 0; x < buffer.W; x++) {
+        if (x % tencent == 0)
+            printf("%d percent \n", 100*x/buffer.W);
         for (int y = 0; y < buffer.H; y++) {
             uvx = (((double)x * 2.0  + 1)/buffer.W - 1) * aspectRatio * fov_a;
             uvy = (1-((double)y * 2.0 + 1)/buffer.H) * fov_a;
@@ -142,5 +144,8 @@ int main(int argc, char* argv[]) {
     // Save image to file
     stbi_write_bmp(filename, buffer.W, buffer.H, 3, buffer.data);
     // Free model memory
-    free(pot);
+    free_model(pot);
+    // Free image
+    free_image(buffer);
+    return 0;
 }

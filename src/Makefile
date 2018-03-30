@@ -12,6 +12,17 @@ DEPS = $(patsubst %,$(INCDIR)/%,$(_DEPS))
 _OBJ = render.o pixels.o geometry.o models.o
 OBJ = $(patsubst %,$(OBJDIR)/%,$(_OBJ))
 
+# Optimization/compilation modes
+
+debug: CFLAGS += -DDEBUG -g -Og
+debug: render
+
+profile: CFLAGS += -pg
+profile: render
+
+build: CFLAGS += -O3
+build: render
+
 $(OBJ): $(OBJDIR)/%.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)
 

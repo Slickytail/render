@@ -14,6 +14,12 @@ Image create_image(int W, int H, Pixel v) {
     return buffer;
 }
 
+void free_image(Image k) {
+    k.W = -1;
+    k.H = -1;
+    free(k.data);
+}
+
 void change_pixel(Image buffer, int X, int Y, Pixel v) {
     int startbyte = byte_at_pixel(buffer.W, buffer.H, X, Y);
     buffer.data[startbyte] = v.r;

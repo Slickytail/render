@@ -166,7 +166,10 @@ struct model* load_obj(const char* name) {
 void free_model(struct model* model) {
     free(model->vertices);
     free(model->normals);
+    free(model->textures);
     free(model->vertexIndex);
+    free(model->texIndex);
     free(model->normIndex);
+
     free(model);
 }
