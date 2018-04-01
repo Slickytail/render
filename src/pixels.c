@@ -1,5 +1,10 @@
 #include "pixels.h"
+
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 #include <stdlib.h>
+#include <stdio.h>
 
 Image create_image(int W, int H, Pixel v) {
     int size = W*H*3;
@@ -17,7 +22,7 @@ Image create_image(int W, int H, Pixel v) {
 void free_image(Image k) {
     k.W = -1;
     k.H = -1;
-    free(k.data);
+    stbi_image_free(k.data);
 }
 
 void change_pixel(Image buffer, int X, int Y, Pixel v) {
@@ -43,4 +48,19 @@ int byte_at_pixel(int W, int H, int X, int Y) {
     if (Y >= H || X >= W)
         return 0;
     return (Y * W * 3) + (X * 3);
+}
+
+Pixel scalepixel(Pixel V, float f) {
+    return (Pixel) {V.r * f, V.g * f, V.b * f};
+}
+
+Image load_image(char* filename) {
+    int x,y,n;
+    unsigned char* data;
+    data = stbi_load(filename, &x, &y, &n, 3);
+    if (data == NULL) {
+        fprintf(stderr, "Bad file");
+    }
+    Image buffer = {data, x, y};
+    return buffer;
 }

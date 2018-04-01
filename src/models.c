@@ -66,7 +66,7 @@ struct model* load_obj(const char* name) {
     output->ntex = numtex;
 
     output->vertices = calloc(numverts, sizeof(Vec));
-    output->textures = calloc(numtex, sizeof(Vec));
+    output->textures = calloc(numtex, sizeof(UV));
     output->normals = calloc(numnorms, sizeof(Vec));
 
     output->vertexIndex = calloc(numfaces * 3, sizeof(int));
@@ -97,8 +97,8 @@ struct model* load_obj(const char* name) {
             output->vertices[vert++] = (Vec) {x, y, z};
         }
         else if (strncmp(f, "vt ", 3)==0) {
-            sscanf(f, "tv %lf %lf", &x, &y);
-            output->textures[tex++] = (Vec) {x, y, 0};
+            sscanf(f, "vt %lf %lf", &x, &y);
+            output->textures[tex++] = (UV) {x, y};
         }
         else if (strncmp(f, "f ", 2)==0) {
             
@@ -164,6 +164,8 @@ struct model* load_obj(const char* name) {
 }
 
 void free_model(struct model* model) {
+    if (model->hasTexture)
+        free_image(model->texture);
     free(model->vertices);
     free(model->normals);
     free(model->textures);
