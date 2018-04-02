@@ -164,8 +164,10 @@ struct model* load_obj(const char* name) {
 }
 
 void free_model(struct model* model) {
-    if (model->hasTexture)
+    if (model->mode.textures)
         free_image(model->texture);
+    if (model->mode.normalmap)
+        free_image(model->normalmap);
     free(model->vertices);
     free(model->normals);
     free(model->textures);

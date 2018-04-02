@@ -39,7 +39,7 @@ int rayTriangleIntersect (Vec orig, Vec dir, const Vec v0, const Vec v1, const V
  
     return 1; 
 } 
-Pixel raytrace(Vec raypos, Vec raydir, struct model* pot, struct renderproperties mode) {
+Pixel raytrace(Vec raypos, Vec raydir, struct model* pot) {
     // We will trace this ray from the camera until it hits a triangle
 
     double tnear = 10000;
@@ -65,7 +65,7 @@ Pixel raytrace(Vec raypos, Vec raydir, struct model* pot, struct renderpropertie
         return (Pixel) {0, 255, 0}; // Background
 
     Vec normal;
-    if (mode.smooth) {
+    if (pot->mode.smooth) {
         p1 = pot->normals[pot->normIndex[hittri*3]];
         p2 = pot->normals[pot->normIndex[hittri*3+1]];
         p3 = pot->normals[pot->normIndex[hittri*3+2]];
@@ -77,19 +77,30 @@ Pixel raytrace(Vec raypos, Vec raydir, struct model* pot, struct renderpropertie
         p3 = pot->vertices[pot->vertexIndex[hittri*3+2]];
         normal = normalize(cross(subvec(p2, p1), subvec(p3, p1)));
     }
-    
-    Pixel V = {255, 0, 255};
-    if (pot->hasTexture) {
+    UV tex;
+    if (pot->mode.textures || pot->mode.normalmap) {
         UV u1 = pot->textures[pot->texIndex[hittri*3]];
         UV u2 = pot->textures[pot->texIndex[hittri*3+1]];
         UV u3 = pot->textures[pot->texIndex[hittri*3+2]];
-        UV tex = combineUV(uv, u1, u2, u3);
-        tex = wrapUV(tex, MIRRORTILE);
-        V = getPixel(pot->texture, (int) (tex.u * pot->texture.W), (int) (tex.v * pot->texture.H));
-        
+        tex = wrapUV(combineUV(uv, u1, u2, u3), TILE);
+    }
+
+    Pixel V;
+    if (pot->mode.textures)
+        V = getPixel(pot->texture, (int) (tex.u * pot->texture.W), (int) ((1.0 - tex.v) * pot->texture.H));
     }
     else {
         V = (Pixel) {255, 255, 255};
+    }
+    if (pot->mode.normalmap) {
+        Pixel N = getPixel(pot->normalmap, (int) (tex.u * pot->texture.W), (int) ((1.0 - tex.v) * pot->texture.H));
+        Vec N = {((double) N.r) / 127.5 - 1f, ((double) N.g) / 127.5 - 1f, ((double) N.b) / 127.5 - 1f};
+
+        p1 = pot->tangent[pot->normIndex[hittri*3]];
+        p2 = pot->tangent[pot->normIndex[hittri*3+1]];
+        p3 = pot->tangent[pot->normIndex[hittri*3+2]];
+        normal = addvec(addvec(scalevec(p1, 1 - uv.u - uv.v), scalevec(p2, uv.u)), scalevec(p3, uv.v));
+        
     }
 
     double d = -dot(normal, raydir);
@@ -99,12 +110,12 @@ Pixel raytrace(Vec raypos, Vec raydir, struct model* pot, struct renderpropertie
 
 }
 
-void render(Image buffer, struct model* pot, struct renderproperties mode) {
-    Vec camera = {3, 1, 1};
-    Vec cangle = normalize((Vec) {-3, -1, -1});
+void render(Image buffer, struct model* pot) {
+    Vec camera = {1, 1, 1};
+    Vec cangle = normalize((Vec) {-1, -0.5, -1});
     Vec uu = normalize(cross((Vec) {0, 1, 0}, cangle));
     Vec vv = normalize(cross(cangle, uu));
-    double fov_a = tan(1.35/2);
+    double fov_a = tan(1.2/2);
     double aspectRatio = (double) buffer.W / buffer.H;
 
     double uvx;
@@ -117,7 +128,7 @@ void render(Image buffer, struct model* pot, struct renderproperties mode) {
             uvx = (((double)x * 2.0  + 1)/buffer.W - 1) * aspectRatio * fov_a;
             uvy = (1-((double)y * 2.0 + 1)/buffer.H) * fov_a;
             Vec dir = normalize(addvec(addvec(scalevec(uu, uvx),scalevec(vv, uvy)), cangle));
-            Pixel V = raytrace(camera, dir, pot, mode);
+            Pixel V = raytrace(camera, dir, pot);
             if (V.r == 0 && V.g == 255) {
                 V = (Pixel) {y * 256 / buffer.H, 256 - (y * 256 / buffer.H), 100};
             }
@@ -129,7 +140,7 @@ void render(Image buffer, struct model* pot, struct renderproperties mode) {
 int main(int argc, char* argv[]) {
     // Check arguments to program 
     if (argc < 5 || argc > 8) {
-        fprintf(stderr, "Usage: render modelname W H filename [-t texture] [-n]\n");
+        fprintf(stderr, "Usage: render modelname W H filename [-p texture] [-n]\n");
         return 1;
     }
     unsigned int W = atoi(argv[2]);
@@ -138,19 +149,30 @@ int main(int argc, char* argv[]) {
     const char* name = argv[1];
 
     // Process mode arguments
-    struct renderproperties mode = {1, 0};
+    struct renderproperties mode = {1, 0, 0};
     char* texname;
+    char* normalname;
     for (int i = 5; i < argc; i++) {
-        if (strcmp(argv[i], "-n") == 0) {
+        if (strcmp(argv[i], "-p") == 0) {
             mode.smooth = 0;
         }
 
         if (strcmp(argv[i], "-t") == 0) {
-            if (i < argc-1 && (strcmp(argv[i+1], "-n") != 0)) {
+            if (i < argc-1 && (strncmp(argv[i+1], "-", 1) != 0)) {
                 texname = argv[i+1];
                 mode.textures = 1;
                 if (access(texname, F_OK|R_OK) == -1) {
                     fprintf(stderr, "Texture File doesn't exist\n");
+                    return 1;
+                }    
+            }
+        }
+        if (strcmp(argv[i], "-n") == 0) {
+            if (i < argc-1 && (strncmp(argv[i+1], "-", 1) != 0)) {
+                normalname = argv[i+1];
+                mode.normalmap = 1;
+                if (access(normalname, F_OK|R_OK) == -1) {
+                    fprintf(stderr, "Normal map doesn't exist\n");
                     return 1;
                 }    
             }
@@ -172,21 +194,24 @@ int main(int argc, char* argv[]) {
 
     mode.smooth = mode.smooth && (pot->f == VNORM || pot->f == VTEXNORM);
     mode.textures = mode.textures && (pot->f == VTEX|| pot->f == VTEXNORM);
-
+    pot->mode = mode;
     if (mode.textures) {
-        pot->hasTexture = 1;
         pot->texture = load_image(texname);
         if (pot->texture.data == NULL)
             return 1;
+        printf("Textures enabled.\n");
+    }
+    if (mode.normalmap) {
+        pot->normalmap = load_image(normalname);
+        if (pot->normalmap.data == NULL)
+            return 1;
+        printf("Normal map enabled.\n");
     }
 
     if (mode.smooth) {
         printf("Smooth shading enabled.\n");
     }
-    if (mode.textures) {
-        printf("Textures enabled.\n");
-    }
-    render(buffer, pot, mode);
+    render(buffer, pot);
     // Save image to file
     stbi_write_tga(filename, buffer.W, buffer.H, 3, buffer.data);
     // Free model memory
