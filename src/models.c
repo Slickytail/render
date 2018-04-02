@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#define MAX_VERT 100000.0
+
 #define MAX_LINE 64
 // Lines shouldn't be long in OBJ
 struct model* load_obj(const char* name) {
@@ -162,12 +164,30 @@ struct model* load_obj(const char* name) {
     printf("Finished loading model!\n");
     return output;
 }
+void generate_acceleration(struct model* model) {
+    BBox bounds = {(Vec) {MAX_VERT, MAX_VERT, MAX_VERT}, (Vec) {-MAX_VERT, -MAX_VERT, -MAX_VERT}};
+    for (int i = 0; i < model->nverts; i++) {
+        Vec vert = model->vertices[i];
 
+        if (vert.x > bounds.bmax.x)
+            bounds.bmax.x = vert.x;
+        if (vert.y > bounds.bmax.y)
+            bounds.bmax.y = vert.y;
+        if (vert.z > bounds.bmax.z)
+            bounds.bmax.z = vert.z;
+
+        if (vert.x < bounds.bmin.x)
+            bounds.bmin.x = vert.x;
+        if (vert.y < bounds.bmin.y)
+            bounds.bmin.y = vert.y;
+        if (vert.z < bounds.bmin.z)
+            bounds.bmin.z = vert.z;
+    }
+    model->bounding = bounds;
+}
 void free_model(struct model* model) {
     if (model->mode.textures)
         free_image(model->texture);
-    if (model->mode.normalmap)
-        free_image(model->normalmap);
     free(model->vertices);
     free(model->normals);
     free(model->textures);

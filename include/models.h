@@ -9,8 +9,12 @@ enum fformat {NONE, VERT, VTEX, VNORM, VTEXNORM};
 struct renderproperties {
     int smooth;
     int textures;
-    int normalmap;
 };
+
+typedef struct box {
+    Vec bmin;
+    Vec bmax;
+} BBox;
 
 struct model {
     int nverts;
@@ -21,21 +25,20 @@ struct model {
     UV* textures;
     Vec* normals;
 
-    Vec* tangent;
-    Vec* bitangent;
-
     int* vertexIndex;
     int* texIndex;
     int* normIndex;
+
+    struct box bounding;
 
     enum fformat f;
     struct renderproperties mode;
 
     Image texture;
-    Image normalmap;
 };
 
 
 struct model* load_obj(const char* name);
+void generate_acceleration(struct model* model);
 void free_model(struct model* model);
 #endif

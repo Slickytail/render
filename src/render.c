@@ -12,6 +12,7 @@
 
 
 #define EPSILON 0.000001
+#define IEPSILON 1000000
 
 int rayTriangleIntersect (Vec orig, Vec dir, const Vec v0, const Vec v1, const Vec v2, double *t, double *u, double *v) { 
     Vec v0v1 = subvec(v1, v0); 
@@ -38,10 +39,66 @@ int rayTriangleIntersect (Vec orig, Vec dir, const Vec v0, const Vec v1, const V
     *t = dot(v0v2, qvec) * invDet; 
  
     return 1; 
-} 
-Pixel raytrace(Vec raypos, Vec raydir, struct model* pot) {
-    // We will trace this ray from the camera until it hits a triangle
+}
+int rayBoxIntersect(Vec o, Vec d, BBox b) {
+    // invdir
+    Vec i;
+    i.x = d.x == 0 ? IEPSILON : 1.0 / d.x;
+    i.y = d.y == 0 ? IEPSILON : 1.0 / d.y;
+    i.z = d.z == 0 ? IEPSILON : 1.0 / d.z;
+    double tmin, tmax, tymin, tymax, tzmin, tzmax;
+    if (i.x >= 0) {
+        tmin = (b.bmin.x - o.x) * i.x;
+        tmax = (b.bmax.x - o.x) * i.x;
+    }
+    else {
+        tmin = (b.bmax.x - o.x) * i.x;
+        tmax = (b.bmin.x - o.x) * i.x;
+    }
 
+    if (i.y >= 0) {
+        tymin = (b.bmin.y - o.y) * i.y;
+        tymax = (b.bmax.y - o.y) * i.y;
+    }
+    else {
+        tymin = (b.bmax.y - o.y) * i.y;
+        tymax = (b.bmin.y - o.y) * i.y;
+    }
+
+
+    if ((tmin > tymax) || (tymin > tmax))
+        return 0;
+    if (tymin > tmin)
+        tmin = tymin;
+    if (tymax < tmax)
+        tmax = tymax;
+
+    if (i.z >= 0) {
+        tzmin = (b.bmin.z - o.z) * i.z;
+        tzmax = (b.bmax.z - o.z) * i.z;
+    }
+    else {
+        tzmin = (b.bmax.z - o.z) * i.z;
+        tzmax = (b.bmin.z - o.z) * i.z;
+    }
+
+    if ((tmin > tzmax) || (tzmin > tmax))
+        return 0;
+    if (tzmin > tmin)
+        tmin = tzmin;
+    if (tzmax < tmax)
+        tmax = tzmax;
+
+    return 1;
+   
+}
+Pixel raytrace(Vec raypos, Vec raydir, struct model* pot) {
+    Pixel bg = {0, 255, 0};
+    // Check acceleration boxes
+    if (!rayBoxIntersect(raypos, raydir, pot->bounding))
+        return bg;
+
+    // Ok, this ray hits the bounding box. Let's trace polygons.
     double tnear = 10000;
     double t = 10000000;
     double u = 0;
@@ -62,7 +119,7 @@ Pixel raytrace(Vec raypos, Vec raydir, struct model* pot) {
         }
     }
     if (hittri==-1)
-        return (Pixel) {0, 255, 0}; // Background
+        return bg;
 
     Vec normal;
     if (pot->mode.smooth) {
@@ -77,8 +134,9 @@ Pixel raytrace(Vec raypos, Vec raydir, struct model* pot) {
         p3 = pot->vertices[pot->vertexIndex[hittri*3+2]];
         normal = normalize(cross(subvec(p2, p1), subvec(p3, p1)));
     }
+
     UV tex;
-    if (pot->mode.textures || pot->mode.normalmap) {
+    if (pot->mode.textures) {
         UV u1 = pot->textures[pot->texIndex[hittri*3]];
         UV u2 = pot->textures[pot->texIndex[hittri*3+1]];
         UV u3 = pot->textures[pot->texIndex[hittri*3+2]];
@@ -88,20 +146,8 @@ Pixel raytrace(Vec raypos, Vec raydir, struct model* pot) {
     Pixel V;
     if (pot->mode.textures)
         V = getPixel(pot->texture, (int) (tex.u * pot->texture.W), (int) ((1.0 - tex.v) * pot->texture.H));
-    }
-    else {
+    else
         V = (Pixel) {255, 255, 255};
-    }
-    if (pot->mode.normalmap) {
-        Pixel N = getPixel(pot->normalmap, (int) (tex.u * pot->texture.W), (int) ((1.0 - tex.v) * pot->texture.H));
-        Vec N = {((double) N.r) / 127.5 - 1f, ((double) N.g) / 127.5 - 1f, ((double) N.b) / 127.5 - 1f};
-
-        p1 = pot->tangent[pot->normIndex[hittri*3]];
-        p2 = pot->tangent[pot->normIndex[hittri*3+1]];
-        p3 = pot->tangent[pot->normIndex[hittri*3+2]];
-        normal = addvec(addvec(scalevec(p1, 1 - uv.u - uv.v), scalevec(p2, uv.u)), scalevec(p3, uv.v));
-        
-    }
 
     double d = -dot(normal, raydir);
     if (d < 0)
@@ -140,7 +186,7 @@ void render(Image buffer, struct model* pot) {
 int main(int argc, char* argv[]) {
     // Check arguments to program 
     if (argc < 5 || argc > 8) {
-        fprintf(stderr, "Usage: render modelname W H filename [-p texture] [-n]\n");
+        fprintf(stderr, "Usage: render modelname W H filename [-t texture] [-p]\n");
         return 1;
     }
     unsigned int W = atoi(argv[2]);
@@ -149,9 +195,8 @@ int main(int argc, char* argv[]) {
     const char* name = argv[1];
 
     // Process mode arguments
-    struct renderproperties mode = {1, 0, 0};
+    struct renderproperties mode = {1, 0};
     char* texname;
-    char* normalname;
     for (int i = 5; i < argc; i++) {
         if (strcmp(argv[i], "-p") == 0) {
             mode.smooth = 0;
@@ -163,16 +208,6 @@ int main(int argc, char* argv[]) {
                 mode.textures = 1;
                 if (access(texname, F_OK|R_OK) == -1) {
                     fprintf(stderr, "Texture File doesn't exist\n");
-                    return 1;
-                }    
-            }
-        }
-        if (strcmp(argv[i], "-n") == 0) {
-            if (i < argc-1 && (strncmp(argv[i+1], "-", 1) != 0)) {
-                normalname = argv[i+1];
-                mode.normalmap = 1;
-                if (access(normalname, F_OK|R_OK) == -1) {
-                    fprintf(stderr, "Normal map doesn't exist\n");
                     return 1;
                 }    
             }
@@ -191,6 +226,8 @@ int main(int argc, char* argv[]) {
     
     // Load model
     struct model* pot = load_obj(name);
+    // Generate a bounding box for optimization
+    generate_acceleration(pot);
 
     mode.smooth = mode.smooth && (pot->f == VNORM || pot->f == VTEXNORM);
     mode.textures = mode.textures && (pot->f == VTEX|| pot->f == VTEXNORM);
@@ -200,12 +237,6 @@ int main(int argc, char* argv[]) {
         if (pot->texture.data == NULL)
             return 1;
         printf("Textures enabled.\n");
-    }
-    if (mode.normalmap) {
-        pot->normalmap = load_image(normalname);
-        if (pot->normalmap.data == NULL)
-            return 1;
-        printf("Normal map enabled.\n");
     }
 
     if (mode.smooth) {
