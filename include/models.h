@@ -11,11 +11,6 @@ struct renderproperties {
     int textures;
 };
 
-typedef struct box {
-    Vec bmin;
-    Vec bmax;
-} BBox;
-
 struct model {
     int nverts;
     int nfaces;

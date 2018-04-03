@@ -1,6 +1,7 @@
 #include "pixels.h"
 #include "geometry.h"
 #include "models.h"
+#include "lights.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,100 +11,14 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
+#define SHADOW_BIAS 0.001
 
-#define EPSILON 0.000001
-#define IEPSILON 1000000
-
-int rayTriangleIntersect (Vec orig, Vec dir, const Vec v0, const Vec v1, const Vec v2, double *t, double *u, double *v) { 
-    Vec v0v1 = subvec(v1, v0); 
-    Vec v0v2 = subvec(v2, v0); 
-    Vec pvec = cross(dir, v0v2);
-    float det = dot(v0v1, pvec);
- 
-    // ray and triangle are parallel if det is close to 0
-    if (det < EPSILON)
-        return 0; 
- 
-    float invDet = 1 / det;
- 
-    Vec tvec = subvec(orig, v0);
-    *u = dot(tvec, pvec) * invDet;
-    if (*u < 0 || *u > 1)
-        return 0; 
- 
-    Vec qvec = cross(tvec, v0v1);
-    *v = dot(dir, qvec) * invDet;
-    if (*v < 0 || *u + *v > 1)
-        return 0;
- 
-    *t = dot(v0v2, qvec) * invDet; 
- 
-    return 1; 
-}
-int rayBoxIntersect(Vec o, Vec d, BBox b) {
-    // invdir
-    Vec i;
-    i.x = d.x == 0 ? IEPSILON : 1.0 / d.x;
-    i.y = d.y == 0 ? IEPSILON : 1.0 / d.y;
-    i.z = d.z == 0 ? IEPSILON : 1.0 / d.z;
-    double tmin, tmax, tymin, tymax, tzmin, tzmax;
-    if (i.x >= 0) {
-        tmin = (b.bmin.x - o.x) * i.x;
-        tmax = (b.bmax.x - o.x) * i.x;
-    }
-    else {
-        tmin = (b.bmax.x - o.x) * i.x;
-        tmax = (b.bmin.x - o.x) * i.x;
-    }
-
-    if (i.y >= 0) {
-        tymin = (b.bmin.y - o.y) * i.y;
-        tymax = (b.bmax.y - o.y) * i.y;
-    }
-    else {
-        tymin = (b.bmax.y - o.y) * i.y;
-        tymax = (b.bmin.y - o.y) * i.y;
-    }
-
-
-    if ((tmin > tymax) || (tymin > tmax))
-        return 0;
-    if (tymin > tmin)
-        tmin = tymin;
-    if (tymax < tmax)
-        tmax = tymax;
-
-    if (i.z >= 0) {
-        tzmin = (b.bmin.z - o.z) * i.z;
-        tzmax = (b.bmax.z - o.z) * i.z;
-    }
-    else {
-        tzmin = (b.bmax.z - o.z) * i.z;
-        tzmax = (b.bmin.z - o.z) * i.z;
-    }
-
-    if ((tmin > tzmax) || (tzmin > tmax))
-        return 0;
-    if (tzmin > tmin)
-        tmin = tzmin;
-    if (tzmax < tmax)
-        tmax = tzmax;
-
-    return 1;
-   
-}
-Pixel raytrace(Vec raypos, Vec raydir, struct model* pot) {
-    Pixel bg = {0, 255, 0};
-    // Check acceleration boxes
-    if (!rayBoxIntersect(raypos, raydir, pot->bounding))
-        return bg;
-
-    // Ok, this ray hits the bounding box. Let's trace polygons.
+Vec raytraceObject(Vec raypos, Vec raydir, struct model* pot, int* triIndex) {
     double tnear = 10000;
-    double t = 10000000;
+    double t = 0;
     double u = 0;
     double v = 0;
-    UV uv;
+    UV uv = {u, v};
     int hittri = -1;
     Vec p1;
     Vec p2;
@@ -118,9 +33,27 @@ Pixel raytrace(Vec raypos, Vec raydir, struct model* pot) {
             hittri = i;
         }
     }
-    if (hittri==-1)
+    *triIndex = hittri;
+    return (Vec) {uv.u, uv.v, tnear};
+}
+Pixel raytrace(Vec raypos, Vec raydir, struct model* pot) {
+    Pixel bg = {0, 255, 0};
+    // Check acceleration boxes
+    if (!rayBoxIntersect(raypos, raydir, pot->bounding))
         return bg;
 
+    // Ok, this ray hits the bounding box. Let's trace polygons.
+    int hittri;
+
+    Vec tuv = raytraceObject(raypos, raydir, pot, &hittri);
+    if (hittri==-1)
+        return bg;
+    
+    UV uv = {tuv.x, tuv.y};
+    double dist = tuv.z;
+    Vec p1;
+    Vec p2;
+    Vec p3;
     Vec normal;
     if (pot->mode.smooth) {
         p1 = pot->normals[pot->normIndex[hittri*3]];
@@ -149,10 +82,16 @@ Pixel raytrace(Vec raypos, Vec raydir, struct model* pot) {
     else
         V = (Pixel) {255, 255, 255};
 
-    double d = -dot(normal, raydir);
+    
+    DirLight sl = {normalize((Vec) {-1, -0.2, 0.5}), (Vec) {.89, .91, .79}, 0.8f};
+    double d = -dot(normal, sl.dir);
     if (d < 0)
         d = 0;
-    return scalepixel(V, d);
+
+    Vec hitpos = addvec(addvec(raypos, scalevec(raydir, dist)), scalevec(normal, SHADOW_BIAS));
+    tuv = raytraceObject(hitpos, scalevec(sl.dir, -1), pot, &hittri);
+    int vis = hittri == -1;
+    return scalepixel((Pixel) {sl.color.x * V.r, sl.color.y * V.g, sl.color.z * V.b} , d*sl.intensity*vis);
 
 }
 
@@ -161,7 +100,7 @@ void render(Image buffer, struct model* pot) {
     Vec cangle = normalize((Vec) {-1, -0.5, -1});
     Vec uu = normalize(cross((Vec) {0, 1, 0}, cangle));
     Vec vv = normalize(cross(cangle, uu));
-    double fov_a = tan(1.2/2);
+    double fov_a = tan(1.1/2);
     double aspectRatio = (double) buffer.W / buffer.H;
 
     double uvx;

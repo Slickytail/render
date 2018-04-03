@@ -7,10 +7,10 @@ CC = gcc
 CFLAGS = -Wall -std=c99 -I $(INCDIR)
 MATH = -lm
 
-_DEPS = pixels.h stb_image_write.h geometry.h models.h stb_image.h
+_DEPS = pixels.h stb_image_write.h geometry.h models.h stb_image.h lights.h
 DEPS = $(patsubst %,$(INCDIR)/%,$(_DEPS))
 
-_OBJ = render.o pixels.o geometry.o models.o
+_OBJ = render.o pixels.o geometry.o models.o lights.o
 OBJ = $(patsubst %,$(OBJDIR)/%,$(_OBJ))
 
 # Optimization/compilation modes
